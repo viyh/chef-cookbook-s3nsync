@@ -28,7 +28,7 @@ action :create do
     unless @current_resource.exists
         current = ""
         converge_by("Checking S3 bucket s3://#{bucket}") do
-            command     = "#{command_awscli_s3} mb s3://#{bucket}"
+            command     = "#{command_awscli_s3} mb s3://#{bucket} || true"
             log_message = "Creating bucket if it doesn't exist"
             cli_check(cli_run(command, log_message), command)
 
@@ -54,7 +54,7 @@ action :create do
         end
         unless ::File.exist?("/etc/chef/.initial_s3_sync_#{bucket}")
             converge_by("Initial sync from s3://#{bucket} to #{sync_path}") do
-                if Dir["#{node['s3nsync']['sync_path']}/*"].empty?
+                if Dir["#{sync_path}/*"].empty?
                     command     = "#{command_awscli_s3} sync s3://#{bucket}/#{current} #{sync_path}"
                     log_message = "Starting initial sync of S3 bucket s3://#{bucket}/#{current} to#{sync_path}"
                     cli_check(cli_run(command, log_message), command)
@@ -62,9 +62,8 @@ action :create do
                     Chef::Log.info("Initial sync complete.")
                     ::File.open("/etc/chef/.initial_s3_sync_#{bucket}", "w") {}
                 else
-                    Chef::Log.fatal("Skipping initial sync, #{node['s3nsync']['sync_path']} is not empty.
+                    Chef::Log.warn("Skipping initial sync, #{sync_path} is not empty.
                         Manually touch the file /etc/chef/.initial_s3_sync_#{bucket} or remove contents of directory.")
-                    raise "#{node['s3nsync']['sync_path']} is not empty. Manually touch the file /etc/chef/.initial_s3_sync_#{bucket} or remove contents of directory."
                 end
             end
         end
@@ -102,7 +101,7 @@ action :delete do
 end
 
 def load_current_resource
-    @current_resource = Chef::Resource::SamsmkS3nsync.new(@new_resource.name)
+    @current_resource = Chef::Resource::S3nsync.new(@new_resource.name)
     if ::File.exist?("/etc/chef/.intial_s3_sync_#{new_resource.bucket}")
         Chef::Log.info("Already did initial sync.")
         initial_sync = true
